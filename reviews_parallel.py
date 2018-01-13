@@ -1,7 +1,7 @@
 import multiprocessing
 import time
 import sys
-
+import os
 import nltk
 from pymongo import MongoClient
 
@@ -10,7 +10,7 @@ from settings import Settings
 
 def load_stopwords():
     stopwords = {}
-    with open('stopwords.txt', 'rU') as f:
+    with open(os.path.dirname(os.path.abspath(__file__)) + '/' + 'stopwords.txt', 'rU') as f:
         for line in f:
             stopwords[line.strip()] = 1
 

@@ -1,43 +1,31 @@
 import logging
-
 import gensim
 from gensim.corpora import BleiCorpus
 from gensim import corpora
 from pymongo import MongoClient
-
 from settings import Settings
 
 
 class Corpus(object):
-    def __init__(self, cursor, reviews_dictionary, corpus_path):
+    def __init__(self, cursor, reviews_dictionary, corpus_path, business_ids=[]):
         self.cursor = cursor
         self.reviews_dictionary = reviews_dictionary
         self.corpus_path = corpus_path
+        self.business_ids = business_ids
 
     def __iter__(self):
         self.cursor.rewind()
         for review in self.cursor:
-            yield self.reviews_dictionary.doc2bow(review["words"])
+            if self.business_ids:
+                if review["business"] in self.business_ids:
+                    yield self.reviews_dictionary.doc2bow(review["words"])
+            else:
+                yield self.reviews_dictionary.doc2bow(review["words"])
 
     def serialize(self):
         BleiCorpus.serialize(self.corpus_path, self, id2word=self.reviews_dictionary)
 
         return self
-
-
-class Dictionary(object):
-    def __init__(self, cursor, dictionary_path):
-        self.cursor = cursor
-        self.dictionary_path = dictionary_path
-
-    def build(self):
-        self.cursor.rewind()
-        dictionary = corpora.Dictionary(review["words"] for review in self.cursor)
-        dictionary.filter_extremes(keep_n=10000)
-        dictionary.compactify()
-        corpora.Dictionary.save(dictionary, self.dictionary_path)
-
-        return dictionary
 
 
 class Train:
@@ -56,17 +44,27 @@ class Train:
 def main():
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-    dictionary_path = "models/dictionary.dict"
-    corpus_path = "models/corpus.lda-c"
-    lda_num_topics = 50
-    lda_model_path = "models/lda_model_50_topics.lda"
+    lda_num_topics = 20
+    only_restaurant = True
+    business_ids = []
+
+    dictionary_path = "models/dictionary_restaurant.dict"
+    corpus_path = "models/corpus_restaurant.lda-c"
+    lda_model_path = "models/lda_model_20_topics.lda"
+
+    if only_restaurant:
+        business_collection = MongoClient(Settings.MONGO_CONNECTION_STRING)[Settings.REVIEWS_DATABASE][
+            Settings.BUSINESS_COLLECTION]
+        business_cursor = business_collection.find({'categories': 'Restaurants'}, {'business_id': 1})
+        for doc in business_cursor:
+            business_ids.append(doc['business_id'])
 
     corpus_collection = MongoClient(Settings.MONGO_CONNECTION_STRING)[Settings.TAGS_DATABASE][
         Settings.CORPUS_COLLECTION]
-    reviews_cursor = corpus_collection.find()
+    reviews_cursor = corpus_collection.find({})
 
-    dictionary = Dictionary(reviews_cursor, dictionary_path).build()
-    Corpus(reviews_cursor, dictionary, corpus_path).serialize()
+    dictionary = corpora.Dictionary.load(dictionary_path)
+    Corpus(reviews_cursor, dictionary, corpus_path, business_ids=business_ids).serialize()
     Train.run(lda_model_path, corpus_path, lda_num_topics, dictionary)
 
 

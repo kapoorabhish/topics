@@ -1,11 +1,7 @@
-import os
 import time
 import json
-
 from pymongo import MongoClient
-
 from settings import Settings
-
 
 dataset_file = Settings.DATASET_FILE
 reviews_collection = MongoClient(Settings.MONGO_CONNECTION_STRING)[Settings.REVIEWS_DATABASE][
@@ -25,15 +21,15 @@ with open(dataset_file) as dataset:
             data = json.loads(line)
         except ValueError:
             print 'Oops!'
-        if data["type"] == "review":
-            reviews_collection.insert({
-                "reviewId": data["review_id"],
-                "business": data["business_id"],
-                "text": data["text"]
-            })
+
+        reviews_collection.insert({
+            "reviewId": data["review_id"],
+            "business": data["business_id"],
+            "text": data["text"]
+        })
 
         done += 1
         if done % 100 == 0:
             end = time.time()
-            os.system('cls')
+            Settings.clear_screen()
             print 'Done ' + str(done) + ' out of ' + str(count) + ' in ' + str((end - start))
